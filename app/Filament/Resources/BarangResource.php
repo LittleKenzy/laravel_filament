@@ -25,9 +25,9 @@ class BarangResource extends Resource
     {
         return $form
             ->schema([
-                TextInput::make('nama_barang'),
-                TextInput::make('kode_barang'),
-                TextInput::make('harga_barang'),
+                TextInput::make('nama_barang')->columnSpan(2),
+                TextInput::make('kode_barang')->columnSpan(2),
+                TextInput::make('harga_barang')->columnSpan(2),
             ]);
     }
 
@@ -37,7 +37,7 @@ class BarangResource extends Resource
             ->columns([
                 TextColumn::make('nama_barang'),
                 TextColumn::make('kode_barang'),
-                TextColumn::make('harga_barang')
+                TextColumn::make('harga_barang')->formatStateUsing(fn($state): string => 'Rp ' . number_format($state, 0, '.', '.'))
             ])
             ->filters([
                 //

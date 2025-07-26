@@ -25,18 +25,21 @@ class FakturResource extends Resource
 {
     protected static ?string $model = FakturModel::class;
 
+    protected static ?string $navigationGroup = 'Faktur';
+
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+
+    protected static ?string $navigationLabel = 'Faktur';
+
+    public static ?string $slug = 'Faktur';
+
+    public static ?string $label = 'Faktur';
 
     protected static ?string $connectionName = null;
 
     public static function setConnection(string $connection): void
     {
         static::$connectionName = $connection;
-    }
-
-    public static function getConnectionName(): ?string
-    {
-        return static::$connectionName ?? (new static::$model)->getConnectionName();
     }
 
     public static function newModel(): \Illuminate\Database\Eloquent\Model
@@ -98,6 +101,7 @@ class FakturResource extends Resource
                         }
                     }),
                 TextInput::make('kode_customer')
+                    ->disabled()
                     ->reactive()
                     ->columnSpan(2),
                 Repeater::make('detail')
@@ -180,6 +184,24 @@ class FakturResource extends Resource
                     ->columnSpan(2),
                 Textarea::make('ket_faktur')->columnSpan(2),
                 TextInput::make('total')
+                    ->prefix('Rp')
+                    ->live()
+                    ->afterStateUpdated(function (Set $set, $state, Get $get) {
+                        // Auto calculate total_final when total changes
+                        $total = (float) ($state ?? 0);
+                        $nominalCharge = (float) ($get('nominal_charge') ?? 0);
+
+                        if ($total > 0) {
+                            $charge = $total * ($nominalCharge / 100);
+                            $hasil = $total + $charge;
+
+                            $set('charge', (int) $charge);
+                            $set('total_final', (int) $hasil);
+                        } else {
+                            $set('charge', 0);
+                            $set('total_final', 0);
+                        }
+                    })
                     ->placeholder(function (Set $set, Get $get) {
                         $detail = collect($get('detail'))->pluck('subtotal')->sum();
 
@@ -195,24 +217,76 @@ class FakturResource extends Resource
                         'lg' => 1,
                         'xl' => 1,
                     ]),
-                TextInput::make('nominal_charge')->columnSpan([
-                    'default' => 2,
-                    'md' => 1,
-                    'lg' => 1,
-                    'xl' => 1,
-                ])
-                    ->reactive()
+                TextInput::make('nominal_charge')
+                    ->columnSpan([
+                        'default' => 2,
+                        'md' => 1,
+                        'lg' => 1,
+                        'xl' => 1,
+                    ])
+                    ->default(0)
+                    ->numeric()
+                    ->dehydrateStateUsing(fn($state) => $state ?? 0)
+                    ->live()
                     ->afterStateUpdated(function (Set $set, $state, Get $get) {
-                        $total = $get('total');
-                        $charge = $total * ($state / 100);
-                        $hasil = $total + $charge;
+                        $total = (float) ($get('total') ?? 0);
+                        $nominalCharge = (float) ($state ?? 0);
 
-                        $set('total_final', $hasil);
-                        $set('charge', $charge);
+                        // Debug - hapus setelah berhasil
+                        \Log::info('Debug Calculation:', [
+                            'total' => $total,
+                            'nominal_charge' => $nominalCharge,
+                            'raw_total' => $get('total'),
+                            'raw_nominal' => $state
+                        ]);
+
+                        if ($total > 0) {
+                            $charge = $total * ($nominalCharge / 100);
+                            $hasil = $total + $charge;
+
+                            $set('charge', (int) $charge);
+                            $set('total_final', (int) $hasil);
+
+                            \Log::info('Set Values:', [
+                                'charge' => (int) $charge,
+                                'total_final' => (int) $hasil
+                            ]);
+                        }
+                    }),
+                TextInput::make('charge')
+                    ->prefix('Rp')
+                    ->columnSpan(2)
+                    ->label('Hasil Charge')
+                    ->default(function (Get $get) {
+                        // Calculate default charge based on existing data
+                        $total = (float) ($get('total') ?? 0);
+                        $nominalCharge = (float) ($get('nominal_charge') ?? 0);
+
+                        if ($total > 0) {
+                            return (int) ($total * ($nominalCharge / 100));
+                        }
+
+                        return 0;
                     })
-                ,
-                TextInput::make('charge')->columnSpan(2),
-                TextInput::make('total_final')->columnSpan(2),
+                    ->numeric()
+                    ->dehydrateStateUsing(fn($state) => $state ?? 0),
+                TextInput::make('total_final')
+                    ->prefix('Rp')
+                    ->columnSpan(2)
+                    ->default(function (Get $get) {
+                        // Calculate default value based on existing data
+                        $total = (float) ($get('total') ?? 0);
+                        $nominalCharge = (float) ($get('nominal_charge') ?? 0);
+
+                        if ($total > 0) {
+                            $charge = $total * ($nominalCharge / 100);
+                            return (int) ($total + $charge);
+                        }
+
+                        return 0;
+                    })
+                    ->numeric()
+                    ->dehydrateStateUsing(fn($state) => $state ?? 0)
             ]);
     }
 
@@ -225,7 +299,9 @@ class FakturResource extends Resource
                 TextColumn::make('kode_customer'),
                 TextColumn::make('customer.nama_customer'),
                 TextColumn::make('ket_faktur'),
-                TextColumn::make('total'),
+                TextColumn::make('total')
+                    // ->formatStateUsing(fn (FakturModel $record): string => 'Rp ' . number_format($record->totallyGuarded, 0, '.', '.')),
+                    ->formatStateUsing(fn($state): string => 'Rp ' . number_format($state, 0, '.', '.')),
                 TextColumn::make('nominal_charge'),
                 TextColumn::make('charge'),
                 TextColumn::make('total_final'),

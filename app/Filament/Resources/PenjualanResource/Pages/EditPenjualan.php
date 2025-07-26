@@ -16,4 +16,17 @@ class EditPenjualan extends EditRecord
             Actions\DeleteAction::make(),
         ];
     }
+
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        // Set kode_faktur based on faktur_id
+        if (isset($data['faktur_id'])) {
+            $faktur = \App\Models\FakturModel::find($data['faktur_id']);
+            if ($faktur) {
+                $data['kode_faktur'] = $faktur->kode_faktur;
+            }
+        }
+
+        return $data;
+    }
 }

@@ -20,7 +20,7 @@ return new class extends Migration {
             $table->integer('total');
             $table->integer('nominal_charge');
             $table->integer('charge');
-            $table->integer('total_final');
+            $table->integer('total_final')->default(0); // Tambahkan default(0)
             $table->timestamps();
         });
     }

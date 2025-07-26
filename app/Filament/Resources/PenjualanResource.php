@@ -2,15 +2,28 @@
 
 namespace App\Filament\Resources;
 
-use App\Filament\Resources\PenjualanResource\Pages;
-use App\Models\PenjualanModel;
 use Filament\Forms;
-use Filament\Forms\Form;
-use Filament\Resources\Resource;
 use Filament\Tables;
-use Filament\Tables\Columns\TextColumn;
+use Filament\Forms\Form;
 use Filament\Tables\Table;
+use App\Models\PenjualanModel;
+use Filament\Resources\Resource;
+use Filament\Tables\Actions\Action;
+use Filament\Tables\Filters\Filter;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Tables\Actions\EditAction;
+use Filament\Tables\Actions\ViewAction;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\DatePicker;
+use Filament\Tables\Actions\DeleteAction;
+use Filament\Tables\Filters\SelectFilter;
 use Illuminate\Database\Eloquent\Builder;
+use Filament\Forms\Components\Placeholder;
+use Filament\Tables\Actions\BulkActionGroup;
+use Filament\Tables\Actions\DeleteBulkAction;
+use App\Filament\Resources\PenjualanResource\Pages;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class PenjualanResource extends Resource
@@ -25,31 +38,36 @@ class PenjualanResource extends Resource
 
     public static ?string $label = 'Laporan Penjualan';
 
+    public static ?string $slug = 'penjualan';
+
     public static function form(Form $form): Form
     {
         return $form
             ->schema([
-                Forms\Components\TextInput::make('kode_faktur')
+                Placeholder::make('kode_faktur')
                     ->label('Kode Faktur')
-                    ->required(),
-                Forms\Components\DatePicker::make('tanggal')
+                    ->content(fn($record) => $record?->faktur?->kode_faktur),
+                Placeholder::make('kode_customer')
+                    ->label('Kode Customer')
+                    ->content(fn($record) => $record?->customer?->kode_customer),
+                DatePicker::make('tanggal')
                     ->label('Tanggal')
                     ->required(),
-                Forms\Components\TextInput::make('jumlah')
+                TextInput::make('jumlah')
                     ->label('Jumlah')
                     ->numeric()
                     ->required(),
-                Forms\Components\Select::make('customer_id')
+                Select::make('customer_id')
                     ->label('Customer')
                     ->relationship('customer', 'nama_customer')
                     ->required(),
-                Forms\Components\Select::make('faktur_id')
+                Select::make('faktur_id')
                     ->label('Faktur')
                     ->relationship('faktur', 'kode_faktur')
                     ->required(),
-                Forms\Components\Textarea::make('keterangan')
+                Textarea::make('keterangan')
                     ->label('Keterangan'),
-                Forms\Components\Select::make('status')
+                Select::make('status')
                     ->label('Status')
                     ->options([
                         0 => 'Pending',
@@ -70,17 +88,19 @@ class PenjualanResource extends Resource
                     ->searchable()
                     ->date('d F Y'),
 
-                TextColumn::make('kode_faktur') // Perbaiki dari 'kode' ke 'kode_faktur'
+                TextColumn::make('faktur.kode_faktur') // Use relationship to display kode_faktur
                     ->sortable()
                     ->searchable()
                     ->label('Kode Faktur'),
-
                 TextColumn::make('jumlah')
                     ->sortable()
                     ->searchable()
                     ->label('Jumlah')
                     ->money('IDR'), // Format sebagai mata uang
-
+                TextColumn::make('customer.kode_customer')
+                    ->sortable()
+                    ->searchable()
+                    ->label('Kode Customer'),
                 TextColumn::make('customer.nama_customer')
                     ->sortable()
                     ->searchable()
@@ -91,54 +111,50 @@ class PenjualanResource extends Resource
                     ->searchable()
                     ->badge()
                     ->label('Status')
-                    ->formatStateUsing(fn (string $state): string => match ($state) {
+                    ->formatStateUsing(fn(string $state): string => match ($state) {
                         '0' => 'Pending',
-                        '1' => 'Lunas', 
-                        '2' => 'Batal',
+                        '1' => 'Lunas',
+                        '2' => 'Belum Lunas',
                         default => 'Unknown',
                     })
-                    ->color(fn (string $state): string => match ($state) {
+                    ->color(fn(string $state): string => match ($state) {
                         '0' => 'warning',
                         '1' => 'success',
                         '2' => 'danger',
                         default => 'gray',
                     }),
-
-                TextColumn::make('faktur.kode_faktur')
-                    ->sortable()
-                    ->searchable()
-                    ->label('Ref Faktur'),
-
-                TextColumn::make('keterangan')
-                    ->label('Keterangan')
-                    ->limit(50),
+            ])
+            ->emptyStateHeading('Tidak Ada Data Laporan')
+            ->emptyStateDescription('Silakan tambahkan data laporan')
+            ->emptyStateIcon('heroicon-o-presentation-chart-bar')
+            ->emptyStateActions([
+                Action::make('create')
+                    ->label('Create Post')
+                    ->url(route('filament.admin.resources.Faktur.create'))
+                    ->icon('heroicon-m-plus')
+                    ->button(),
             ])
             ->filters([
-                Tables\Filters\SelectFilter::make('status')
+                SelectFilter::make('status')
                     ->options([
                         '0' => 'Pending',
                         '1' => 'Lunas',
                         '2' => 'Batal',
                     ]),
-                Tables\Filters\Filter::make('tanggal')
+                Filter::make('tanggal')
                     ->form([
-                        Forms\Components\DatePicker::make('dari_tanggal'),
-                        Forms\Components\DatePicker::make('sampai_tanggal'),
-                    ])
-                    ->query(function (Builder $query, array $data): Builder {
-                        return $query
-                            ->when($data['dari_tanggal'], fn (Builder $query, $date): Builder => $query->whereDate('tanggal', '>=', $date))
-                            ->when($data['sampai_tanggal'], fn (Builder $query, $date): Builder => $query->whereDate('tanggal', '<=', $date));
-                    }),
+                        DatePicker::make('dari_tanggal'),
+                        DatePicker::make('sampai_tanggal'),
+                    ]),
             ])
             ->actions([
-                Tables\Actions\ViewAction::make(),
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                ViewAction::make(),
+                EditAction::make(),
+                DeleteAction::make(),
             ])
             ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ])
             ->defaultSort('tanggal', 'desc');

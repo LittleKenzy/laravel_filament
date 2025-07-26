@@ -4,14 +4,24 @@ namespace App\Filament\Resources\FakturResource\Pages;
 
 use App\Filament\Resources\FakturResource;
 use App\Models\PenjualanModel;
-use Filament\Actions;
+use App\Models\CustomerModel;
 use Filament\Resources\Pages\CreateRecord;
 
 class CreateFaktur extends CreateRecord
 {
     protected static string $resource = FakturResource::class;
 
-    // app/Filament/Resources/FakturResource/Pages/CreateFaktur.php
+    protected function mutateFormDataBeforeCreate(array $data): array
+    {
+        if (isset($data['customer_id'])) {
+            $customer = CustomerModel::find($data['customer_id']);
+            if ($customer) {
+                $data['kode_customer'] = $customer->kode_customer;
+            }
+        }
+        return $data;
+    }
+
     protected function afterCreate()
     {
         PenjualanModel::create([
